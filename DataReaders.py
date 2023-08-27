@@ -6,7 +6,7 @@ def read_activities_excel(file_name):
     data_frame = pd.read_csv(file_name, skiprows=1, index_col=False)
 
     sport_types = {1001: "Walking",
-                   11007: "Cycling",
+                   11007: "Biking",
                    1002: "Running",
                    0: "Other",
                    14001: "Swimming",
@@ -76,6 +76,20 @@ def read_json_for_tcx(file_db, test_id):
         if col in columns_to_drop:
             compiled_frame.drop([col], axis='columns', inplace=True)
 
+    # filling nan values for speed, heart rate and cadence
+    if "heart_rate" in compiled_frame.columns:
+        if compiled_frame['heart_rate'].isna().sum() < len(compiled_frame['heart_rate']):
+            compiled_frame['heart_rate'].fillna(method="backfill", inplace=True)
+
+    if "speed" in compiled_frame.columns:
+        if compiled_frame['speed'].isna().sum() < len(compiled_frame['speed']):
+            compiled_frame['speed'].fillna(method="backfill", inplace=True)
+
+    if "cadence" in compiled_frame.columns:
+        if compiled_frame['cadence'].isna().sum() < len(compiled_frame['cadence']):
+            compiled_frame['cadence'].fillna(method="backfill", inplace=True)
+
+
     # compiled_frame = compiled_frame.resample("2S", on='start_time').mean()
     #
     # compiled_frame['start_time'] = compiled_frame.index
@@ -115,9 +129,21 @@ def get_tcx_header_data(df, data_id):
         return False
 
 
-def create_tcx_header(header_data):
+def create_tcx_header(header_data, garmin_mode=0):
     #  header_data = [sport_type, start_time, total_time_sec, distance_meters, max_speed, calories, max_hr, mean_hr,
     #                    mean_cadence, max_cadence]
+
+    # if garmin_mode == 1: only Biking and Running inserted into the header, for everything else "other" is written,
+    #  to be compatible with garmin tcx import
+
+    if garmin_mode == 1:
+        if "Biking" not in header_data and "Running" not in header_data:
+            activity_type = "Other"
+        else:
+            activity_type = header_data[0]
+    else:
+        activity_type = header_data[0]
+
     header_data[1] = f"{header_data[1].replace(' ', 'T')}"
     header = (
         f'<?xml version="1.0" encoding="UTF-8"?>\n'
@@ -129,7 +155,7 @@ def create_tcx_header(header_data):
         f'  xmlns="http://www.garmin.com/xmlschemas/TrainingCenterDatabase/v2"\n'
         f'  xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:ns4="http://www.garmin.com/xmlschemas/ProfileExtension/v1">\n'
         f'  <Activities>\n'
-        f'    <Activity Sport="{header_data[0]}">\n'
+        f'    <Activity Sport="{activity_type}">\n'
         f'      <Id>{header_data[1]}Z</Id>\n'
         f'      <Lap StartTime="{header_data[1]}Z">\n'
 
